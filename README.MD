@@ -1,0 +1,1 @@
+Day 1: I have finished the task 1. Solved 3 problems from leetcode and drawed the explanation
