@@ -1,5 +1,9 @@
+import os
 import unittest
+
 import numpy as np
+import pandas as pd
+
 from threat_score_calculator import calculate_threat_score
 
 ENGINEERING = "Engineering"
@@ -11,212 +15,101 @@ SCIENCE = "Science"
 def generate_random_data(mean, variance, num_samples):
     return np.random.randint(max(mean - variance, 0), min(mean + variance + 1, 90), num_samples)
 
-def generate_department_data(name, mean, variance, num_samples, importance):
-    return {
-        "name": name,
-        "threat_scores": generate_random_data(mean=mean, variance=variance, num_samples=num_samples),
-        "importance": importance
-    }
 
+def generate_or_load_data(params, file_path):
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    else:
+        all_data = []
+        for dept_id, (mean, variance, num_samples) in enumerate(params, start=1):
+            data = generate_random_data(mean, variance, num_samples)
+            all_data.append(pd.DataFrame({
+                "Department": [dept_id] * len(data),
+                "ThreatScore": data
+            }))
+        result = pd.concat(all_data, ignore_index=True)
+        result.to_csv(file_path, index=False)
+        return result
+
+def convert_threat_score_df_to_array(df):
+    grouped = df.groupby('Department')["ThreatScore"].apply(list)
+    return grouped.tolist()
 
 class TestThreatScore(unittest.TestCase):
 
-# Case 1:
-# - each department has no outliers (no really high threat scores)
-# - each department mean threat score are NOT far from each other
-# - similiar number of users.
-# - all departments has the same importance
     def test_case1(self):
+        """
+        Case 1:
+        All departments has quite same high scores.
+        Expect that calculated threat score will be too high(within [78, 86])
+        """
         # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=10, variance=5, num_samples=100, importance=3),
-            generate_department_data(name=MARKETING, mean=9, variance=5, num_samples=90, importance=3),
-            generate_department_data(name=FINANCE, mean=12, variance=5, num_samples=95, importance=3),
-            generate_department_data(name=HR, mean=13, variance=5, num_samples=92, importance=3),
-            generate_department_data(name=SCIENCE, mean=10, variance=5, num_samples=93, importance=3),
-        ]
+        params = [(80, 5, 100), (82, 5, 100), (87, 5, 100), (85, 4, 100), (88, 4, 100)]
+        file_path = 'test_case_1.csv'
+
+        df = generate_or_load_data(params, file_path)
+        data = convert_threat_score_df_to_array(df)
 
         # when
-        actual = calculate_threat_score(departments=departments)
+        actual = calculate_threat_score(data=data)
 
         # then
-        self.assertTrue(0 <= actual <= 90)
+        self.assertTrue(78 <= actual <= 90)
 
-# Case 2:
-# - each department has high threat scores
-# - each department mean threat score are same
-# - each department has same variance threat score
-# - each department has same number of users
-# - each department has same and high importance
     def test_case2(self):
+        """
+        Case 2:
+        One department has high mean threat score, other low
+        Expect high threat score
+        """
         # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=80, variance=10, num_samples=80, importance=5),
-            generate_department_data(name=MARKETING, mean=80, variance=10, num_samples=80, importance=5),
-            generate_department_data(name=FINANCE, mean=80, variance=10, num_samples=80, importance=5),
-            generate_department_data(name=HR, mean=80, variance=10, num_samples=80, importance=5),
-            generate_department_data(name=SCIENCE, mean=80, variance=10, num_samples=80, importance=5),
-        ]
+        params = [(80, 4, 100), (30, 4, 100), (23, 3, 100), (10, 5, 100), (15, 3, 100)]
+        file_path = 'test_case_2.csv'
+
+        df = generate_or_load_data(params, file_path)
+        data = convert_threat_score_df_to_array(df)
 
         # when
-        actual = calculate_threat_score(departments=departments)
+        actual = calculate_threat_score(data)
 
         # then
-        self.assertTrue(0 <= actual <= 90)
+        self.assertTrue(75 <= actual <= 85)
 
-# Case 3:
-# - each department has 89 threat scores (mean = 89, variance = 0)
-# - each department has same number of users
-# - each department has same and high importance
     def test_case3(self):
+        """
+        All departments have the same mean threat scores, but in one department there are really high threat score users.
+        Expect high threat score
+        """
+
         # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=89, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=MARKETING, mean=89, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=FINANCE, mean=89, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=HR, mean=89, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=SCIENCE, mean=89, variance=0, num_samples=100, importance=5),
-        ]
+        params = [(80, 40, 100), (25, 3, 100), (30, 10, 100), (20, 4, 100), (15, 2, 100)]
+        file_path = 'test_case_3.csv'
+
+        df = generate_or_load_data(params, file_path)
+        data = convert_threat_score_df_to_array(df)
 
         # when
-        actual = calculate_threat_score(departments=departments)
+        actual = calculate_threat_score(data)
 
         # then
-        self.assertTrue(0 <= actual <= 90)
-    
-# Case 4:
-# - each department has 90 threat scores (mean = 89, variance = 0)
-# - each department has same number of users
-# - each department has same and low importance
+        self.assertTrue(65 <= actual <= 85)
+
     def test_case4(self):
+        """
+        Case 4:
+        All departments has a different number of users and quite high mean threat scores
+        Expect high threat score
+        """
+
         # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=89, variance=0, num_samples=100, importance=1),
-            generate_department_data(name=MARKETING, mean=89, variance=0, num_samples=100, importance=1),
-            generate_department_data(name=FINANCE, mean=89, variance=0, num_samples=100, importance=1),
-            generate_department_data(name=HR, mean=89, variance=0, num_samples=100, importance=1),
-            generate_department_data(name=SCIENCE, mean=89, variance=0, num_samples=100, importance=1),
-        ]
+        params = [(80, 4, 50), (74, 3, 10), (69, 2, 100), (85, 4, 83), (78, 2, 5)]
+        file_path = 'test_case_4.csv'
+
+        df = generate_or_load_data(params, file_path)
+        data = convert_threat_score_df_to_array(df)
 
         # when
-        actual = calculate_threat_score(departments=departments)
+        actual = calculate_threat_score(data)
 
         # then
-        self.assertTrue(0 <= actual <= 90)
-    
-# Case 5:
-# - all departments has 89 threat scores (mean = 89, variance = 0)
-# - departments has different random user numbers
-# - departments has same high importance = 5
-    def test_case5(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=89, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=MARKETING, mean=89, variance=0, num_samples=76, importance=5),
-            generate_department_data(name=FINANCE, mean=89, variance=0, num_samples=23, importance=5),
-            generate_department_data(name=HR, mean=89, variance=0, num_samples=5, importance=5),
-            generate_department_data(name=SCIENCE, mean=89, variance=0, num_samples=33, importance=5),
-        ]
-
-        # when
-        actual = calculate_threat_score(departments=departments)
-
-        # then
-        self.assertTrue(0 <= actual <= 90)
-
-# Case 6:
-# - all departments has low threat scores
-# - all departments has approximately same mean threat score (mean is same, but variance varies not so far)
-# - similar high user numbers
-# - same high importance
-    def test_case6(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=25, variance=10, num_samples=88, importance=4),
-            generate_department_data(name=MARKETING, mean=25, variance=9, num_samples=80, importance=4),
-            generate_department_data(name=FINANCE, mean=25, variance=4, num_samples=95, importance=4),
-            generate_department_data(name=HR, mean=25, variance=12, num_samples=100, importance=4),
-            generate_department_data(name=SCIENCE, mean=25, variance=7, num_samples=83, importance=4),
-        ]
-
-        # when
-        actual = calculate_threat_score(departments=departments)
-
-        # then
-        self.assertTrue(0 <= actual <= 90)
-    
-# Case 7:
-# - all departments has low threat scores
-# - all departments has approximately same mean threat score (mean is same, but variance varies not so far)
-# - similar high user numbers
-# - same low importance = 2
-    def test_case7(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=10, variance=5, num_samples=95, importance=2),
-            generate_department_data(name=MARKETING, mean=10, variance=3, num_samples=90, importance=2),
-            generate_department_data(name=FINANCE, mean=10, variance=7, num_samples=91, importance=2),
-            generate_department_data(name=HR, mean=10, variance=2, num_samples=89, importance=2),
-            generate_department_data(name=SCIENCE, mean=10, variance=10, num_samples=87, importance=2),
-        ]
-
-        # when
-        actual = calculate_threat_score(departments=departments)
-
-        # then
-        self.assertTrue(0 <= actual <= 90)
-    
-# Case 8:
-# - all departments has low threat scores
-# - all departments has approximately same mean threat score (mean is same, but variance varies not so far)
-# - different user numbers
-# - different importance
-    def test_case8(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=15, variance=4, num_samples=99, importance=5),
-            generate_department_data(name=MARKETING, mean=15, variance=3, num_samples=32, importance=3),
-            generate_department_data(name=FINANCE, mean=15, variance=1, num_samples=51, importance=4),
-            generate_department_data(name=HR, mean=15, variance=10, num_samples=16, importance=1),
-            generate_department_data(name=SCIENCE, mean=15, variance=5, num_samples=40, importance=2),
-        ]
-
-        # when
-        actual = calculate_threat_score(departments=departments)
-
-        # then
-        self.assertTrue(0 <= actual <= 90)
-    
-# Case 9:
-# - all departments has different threat scores (different mean and variance)
-# - different user numbers
-# - different importance
-    def test_case9(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=34, variance=10, num_samples=100, importance=5),
-            generate_department_data(name=MARKETING, mean=67, variance=20, num_samples=56, importance=4),
-            generate_department_data(name=FINANCE, mean=80, variance=10, num_samples=30, importance=5),
-            generate_department_data(name=HR, mean=10, variance=5, num_samples=24, importance=2),
-            generate_department_data(name=SCIENCE, mean=52, variance=25, num_samples=15, importance=1),
-        ]
-
-        # when
-        actual = calculate_threat_score(departments=departments)
-
-        # then
-        self.assertTrue(0 <= actual <= 90)
-
-# Case 10:
-# - all departments has 0 threat score (mean = 0, variance = 0)
-# - 100 users for all departments
-# - same high importance
-    def test_case10(self):
-        # given
-        departments = [
-            generate_department_data(name=ENGINEERING, mean=0, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=MARKETING, mean=0, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=FINANCE, mean=0, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=HR, mean=0, variance=0, num_samples=100, importance=5),
-            generate_department_data(name=SCIENCE, mean=0, variance=0, num_samples=100, importance=5),
-        ]
+        self.assertTrue(70 <= actual <= 85)

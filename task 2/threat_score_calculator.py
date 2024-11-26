@@ -1,7 +1,12 @@
 import numpy as np
 
-def calculate_threat_score(departments):
-    total_importance = np.sum([department["importance"] for department in departments])
-    weighted_total_score = np.sum([department["importance"] * np.mean(department["threat_scores"]) for department in departments])
+def calculate_threat_score(data):
+    return np.max([calculate_threat_score_helper(np.array(x)) for x in data])
 
-    return weighted_total_score / total_importance
+def calculate_threat_score_helper(data):
+    mean = np.mean(data)
+    variance = np.var(data)
+
+    if variance > 150:
+        return np.mean(data[(data - mean)**2 >= variance])
+    return mean
