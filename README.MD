@@ -7,3 +7,6 @@ by sum of all importance. Created 10 test cases to check that calculated threat 
 interval
 # Day 3: 
 I have finished task 3. Observed that simple solution exists with (hour2 - hour1) mod 24 formula. Trying to solve it with trigonometric method
+
+## Run elastic search:
+docker run --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:8.10.0
